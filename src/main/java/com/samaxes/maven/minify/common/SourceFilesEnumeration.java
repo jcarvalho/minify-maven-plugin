@@ -18,9 +18,7 @@
  */
 package com.samaxes.maven.minify.common;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.Enumeration;
 import java.util.List;
@@ -35,7 +33,7 @@ import org.apache.maven.plugin.logging.Log;
  */
 public class SourceFilesEnumeration implements Enumeration<InputStream> {
 
-    private List<File> files;
+    private List<Resource> files;
 
     private int current = 0;
 
@@ -46,10 +44,10 @@ public class SourceFilesEnumeration implements Enumeration<InputStream> {
      * @param files list of files
      * @param verbose show source file paths in log output
      */
-    public SourceFilesEnumeration(Log log, List<File> files, boolean verbose) {
+    public SourceFilesEnumeration(Log log, List<Resource> files, boolean verbose) {
         this.files = files;
 
-        for (File file : files) {
+        for (Resource file : files) {
             log.info("Processing source file [" + ((verbose) ? file.getPath() : file.getName()) + "].");
         }
     }
@@ -78,12 +76,12 @@ public class SourceFilesEnumeration implements Enumeration<InputStream> {
         if (!hasMoreElements()) {
             throw new NoSuchElementException("No more files!");
         } else {
-            File nextElement = files.get(current);
+            Resource nextElement = files.get(current);
             current++;
 
             try {
-                is = new FileInputStream(nextElement);
-            } catch (FileNotFoundException e) {
+                is = nextElement.getInputStream();
+            } catch (IOException e) {
                 throw new NoSuchElementException("The path [" + nextElement.getPath() + "] cannot be found.");
             }
         }

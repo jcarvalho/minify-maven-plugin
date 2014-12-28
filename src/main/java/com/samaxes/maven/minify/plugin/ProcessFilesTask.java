@@ -28,6 +28,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.SequenceInputStream;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -40,7 +41,10 @@ import org.codehaus.plexus.util.DirectoryScanner;
 import org.codehaus.plexus.util.FileUtils;
 import org.codehaus.plexus.util.IOUtil;
 
+import com.samaxes.maven.minify.common.FileResource;
+import com.samaxes.maven.minify.common.Resource;
 import com.samaxes.maven.minify.common.SourceFilesEnumeration;
+import com.samaxes.maven.minify.common.URLResource;
 import com.samaxes.maven.minify.common.YuiConfig;
 import com.samaxes.maven.minify.plugin.MinifyMojo.Engine;
 
@@ -77,7 +81,7 @@ public abstract class ProcessFilesTask implements Callable<Object> {
 
     private final String mergedFilename;
 
-    private final List<File> files = new ArrayList<File>();
+    private final List<Resource> files = new ArrayList<>();
 
     private final boolean sourceFilesEmpty;
 
@@ -153,7 +157,11 @@ public abstract class ProcessFilesTask implements Callable<Object> {
                     log.info("Skipping the merge step...");
                     String sourceBasePath = sourceDir.getAbsolutePath();
 
-                    for (File mergedFile : files) {
+                    for (Resource resource : files) {
+                        if (!(resource instanceof FileResource)) {
+                            log.warn("Skipping non-file resource [" + resource.getPath() + "]");
+                        }
+                        File mergedFile = ((FileResource) resource).getFile();
                         // Create folders to preserve sub-directory structure when only minifying
                         String originalPath = mergedFile.getAbsolutePath();
                         String subPath = originalPath.substring(sourceBasePath.length(),
@@ -255,9 +263,25 @@ public abstract class ProcessFilesTask implements Callable<Object> {
      * @throws FileNotFoundException when the given source file does not exist
      */
     private void addNewSourceFile(String finalFilename, String sourceFilename) throws FileNotFoundException {
-        File sourceFile = new File(sourceDir, sourceFilename);
+        if (sourceFilename.startsWith("classpath:")) {
+            URL url = Thread.currentThread().getContextClassLoader().getResource(sourceFilename.substring("classpath:".length()));
+            addNewSourceURL(sourceFilename, url);
+        } if (sourceFilename.startsWith("webjar:")) {
+            URL url = Thread.currentThread().getContextClassLoader().getResource("META-INF/resources/webjars/" + sourceFilename.substring("webjar:".length()));
+            addNewSourceURL(sourceFilename, url);
+        } else {
+            File sourceFile = new File(sourceDir, sourceFilename);
 
-        addNewSourceFile(finalFilename, sourceFile);
+            addNewSourceFile(finalFilename, sourceFile);            
+        }
+    }
+
+    private void addNewSourceURL(String sourceFilename, URL url) throws FileNotFoundException {
+        if (url == null) {
+            throw new FileNotFoundException("The source file [" + sourceFilename + "] does not exist.");
+        }
+        log.debug("Adding source file [" + sourceFilename + "].");
+        files.add(new URLResource(url));
     }
 
     /**
@@ -274,7 +298,7 @@ public abstract class ProcessFilesTask implements Callable<Object> {
                         + "] has the same name as the final file.");
             }
             log.debug("Adding source file [" + ((verbose) ? sourceFile.getPath() : sourceFile.getName()) + "].");
-            files.add(sourceFile);
+            files.add(new FileResource(sourceFile));
         } else {
             throw new FileNotFoundException("The source file ["
                     + ((verbose) ? sourceFile.getPath() : sourceFile.getName()) + "] does not exist.");
